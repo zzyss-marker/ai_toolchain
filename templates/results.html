@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>训练结果</title>
+</head>
+<body>
+    <h1>训练结果</h1>
+    <h2>损失曲线</h2>
+    <img src="data:image/png;base64,{{ loss_img }}" alt="损失曲线">
+    <h2>准确率曲线</h2>
+    <img src="data:image/png;base64,{{ acc_img }}" alt="准确率曲线">
+    <a href="{{ url_for('inference') }}">前往推理页面</a>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>模型推理</title>
+</head>
+<body>
+    <h1>模型推理</h1>
+    <form method="post" enctype="multipart/form-data">
+        <label>上传图片（28x28像素的手写数字）:</label>
+        <input type="file" name="image"><br>
+        <button type="submit">开始推理</button>
+    </form>
+    {% if prediction is not none %}
+        <h2>预测结果: {{ prediction }}</h2>
+    {% endif %}
+</body>
+</html>
