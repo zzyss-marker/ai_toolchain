@@ -1,5 +1,6 @@
-flask
-torch
-torchvision
-pillow
-matplotlib
+flask>=2.0.0
+torch>=1.9.0
+torchvision>=0.10.0
+pillow>=8.0.0
+matplotlib>=3.4.0
+numpy>=1.19.0
