@@ -665,6 +665,8 @@
                         <div class="alert alert-success">
                             <h6 class="mb-0">预测结果</h6>
                             <strong class="fs-4">${className}</strong>
+                            <br>
+                            <small class="text-muted">置信度: ${(response.confidence * 100).toFixed(2)}%</small>
                         </div>
                     `);
                 },

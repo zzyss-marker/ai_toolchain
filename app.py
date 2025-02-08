@@ -257,104 +257,116 @@ def inference():
         try:
             file = request.files['image']
             model_name = request.form.get('model_name')
-
-            # 验证模型名称格式
-            if not model_name or not model_name.endswith('.pth'):
-                return jsonify({'error': '无效的模型名称'}), 400
-
-            # 从模型名称中提取数据集类型
-            dataset_type = None
-            # 打印模型名称用于调试
-            print(f"Processing model: {model_name}")
             
-            if model_name.startswith('MNIST_'):
-                dataset_type = 'MNIST'
-            elif model_name.startswith('CIFAR10_'):
-                dataset_type = 'CIFAR10'
-            elif model_name.startswith('Fashion') or model_name.startswith('FASHION') or model_name.startswith('FashionMNIST_'):
-                dataset_type = 'FashionMNIST'
-            else:
-                print(f"Unable to determine dataset type from model name: {model_name}")
-                return jsonify({'error': '无法识别的模型类型'}), 400
-
-            print(f"Detected dataset type: {dataset_type}")
-
+            print(f"开始处理推理请求: {model_name}")
+            
             # 加载模型数据
             model_path = f'static/models/{model_name}'
             model_data = torch.load(model_path)
+            dataset_type = model_data['dataset']
             
-            # 验证模型数据中的数据集类型是否匹配
-            if model_data['dataset'] != dataset_type:
-                print(f"Dataset mismatch: Expected {dataset_type}, got {model_data['dataset']}")
-                return jsonify({'error': '模型数据集类型不匹配'}), 400
-            
-            # 验证输入形状是否匹配
-            expected_shape = AVAILABLE_DATASETS[dataset_type]['input_shape']
-            if model_data['input_shape'] != expected_shape:
-                print(f"Input shape mismatch: Expected {expected_shape}, got {model_data['input_shape']}")
-                return jsonify({'error': '模型输入形状不匹配'}), 400
+            print(f"数据集类型: {dataset_type}")
+            print(f"模型输入形状: {model_data['input_shape']}")
+            print(f"预处理配置: {model_data['preprocessing']}")
 
             # 构建模型并加载参数
             model = Net(model_data['model_config'], 
-                       input_shape=model_data['input_shape'],
-                       num_classes=model_data['num_classes'])
+                      input_shape=model_data['input_shape'],
+                      num_classes=model_data['num_classes'])
             model.load_state_dict(model_data['model_state'])
             model.eval()
 
             # 处理上传的图片
             img = Image.open(file)
             
+            # 保存原始图像尺寸用于调试
+            original_size = img.size
+            print(f"原始图像尺寸: {original_size}")
+
             # 根据数据集类型进行预处理
-            print(f"Processing image for dataset: {model_data['dataset']}")
-            if model_data['dataset'] == 'MNIST':
+            if dataset_type in ['MNIST', 'FashionMNIST']:
                 # 转换为灰度图
                 img = img.convert('L')
                 # 调整大小为28x28
-                img = img.resize((28, 28))
+                img = img.resize((28, 28), Image.Resampling.LANCZOS)
                 # 反转颜色（确保白色笔画在黑色背景上）
                 img = ImageOps.invert(img)
-            elif model_data['dataset'] == 'CIFAR10':
+            elif dataset_type == 'CIFAR10':
                 # 转换为RGB
                 img = img.convert('RGB')
                 # 调整大小为32x32
-                img = img.resize((32, 32))
-            elif model_data['dataset'] == 'FashionMNIST':
-                # 转换为灰度图
-                img = img.convert('L')
-                # 调整大小为28x28
-                img = img.resize((28, 28))
-                # 反转颜色
-                img = ImageOps.invert(img)
-            else:
-                return jsonify({'error': '不支持的数据集类型'}), 400
+                img = img.resize((32, 32), Image.Resampling.LANCZOS)
 
-            # 应用相同的预处理
-            transform_list = [transforms.ToTensor()]
+            # 保存处理后的图像尺寸用于调试
+            processed_size = img.size
+            print(f"处理后图像尺寸: {processed_size}")
+
+            # 构建与训练时相同的预处理流程
+            transform_list = []
+            
+            # 添加数据增强（推理时只使用基本变换）
+            if 'preprocessing' in model_data:
+                preprocessing = model_data['preprocessing']
+                print(f"应用预处理配置: {preprocessing}")
+            
+            # 基本变换
+            transform_list.append(transforms.ToTensor())
+            
+            # 添加标准化，确保与训练时使用相同的参数
             if model_data['preprocessing'].get('normalization') == 'StandardNormalization':
-                transform_list.append(transforms.Normalize((0.5,), (0.5,)))
+                if dataset_type == 'CIFAR10':
+                    transform_list.append(transforms.Normalize(
+                        mean=[0.5, 0.5, 0.5],
+                        std=[0.5, 0.5, 0.5]
+                    ))
+                else:  # MNIST 和 FashionMNIST
+                    transform_list.append(transforms.Normalize(
+                        mean=[0.5],
+                        std=[0.5]
+                    ))
+            elif model_data['preprocessing'].get('normalization') == 'MinMaxNormalization':
+                transform_list.append(transforms.Lambda(
+                    lambda x: (x - x.min()) / (x.max() - x.min())
+                ))
             
             transform = transforms.Compose(transform_list)
             img_tensor = transform(img).unsqueeze(0)
 
+            # 打印张量信息用于调试
+            print(f"输入张量形状: {img_tensor.shape}")
+            print(f"输入张量值范围: [{img_tensor.min().item():.2f}, {img_tensor.max().item():.2f}]")
+
             # 验证张量形状
             expected_shape = (1,) + model_data['input_shape']
             if img_tensor.shape != expected_shape:
-                print(f"Tensor shape mismatch: Expected {expected_shape}, got {img_tensor.shape}")
+                print(f"张量形状不匹配: 期望 {expected_shape}, 实际 {img_tensor.shape}")
                 return jsonify({'error': '图像处理后的形状不匹配'}), 400
 
             # 进行预测
             with torch.no_grad():
                 output = model(img_tensor)
-                pred = output.argmax(dim=1, keepdim=True)
-                prediction = pred.item()
+                # 获取预测概率
+                probabilities = F.softmax(output, dim=1)
+                pred_prob, pred = probabilities.max(1)
+                
+                print(f"预测类别: {pred.item()}, 置信度: {pred_prob.item():.2%}")
+                
+                # 如果置信度太低，可能是预处理问题
+                if pred_prob.item() < 0.5:
+                    print(f"警告：预测置信度较低 ({pred_prob.item():.2%})")
+                    print(f"所有类别的概率: {probabilities[0].tolist()}")
 
-            print(f"Successful prediction for {model_data['dataset']}: {prediction}")
-            return jsonify({
-                'prediction': prediction,
-                'dataset': model_data['dataset']
-            })
+                return jsonify({
+                    'prediction': pred.item(),
+                    'confidence': float(pred_prob.item()),
+                    'dataset': dataset_type,
+                    'probabilities': [float(p) for p in probabilities[0].tolist()]
+                })
+
         except Exception as e:
-            print(f"Inference error: {str(e)}")
+            print(f"推理错误: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return jsonify({'error': str(e)}), 500
     
     # GET 请求返回推理页面
