@@ -8,8 +8,181 @@
     <script src="https://code.jquery.com/ui/1.13.1/jquery-ui.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
+    <!-- 帮助按钮 -->
+    <button id="help-button" class="floating-help-button" title="查看使用指南">
+        <i class="fas fa-question"></i>
+    </button>
+    
+    <!-- 帮助指南面板 -->
+    <div id="help-panel" class="help-panel">
+        <div class="help-header">
+            <h5>使用指南</h5>
+            <button class="close-help-button">&times;</button>
+        </div>
+        <div class="help-content">
+            <div class="help-section">
+                <h6>快速开始</h6>
+                <ol>
+                    <li>从左侧选择一个数据集拖入工作区</li>
+                    <li>按推荐结构拖入模型层</li>
+                    <li>点击"开始训练"</li>
+                    <li>等待训练完成后前往推理页面测试</li>
+                </ol>
+            </div>
+
+            <div class="help-section">
+                <h6>数据集说明</h6>
+                <ul>
+                    <li><strong>MNIST</strong>: 手写数字识别（0-9）</li>
+                    <li><strong>CIFAR10</strong>: 物体识别（10种常见物体）</li>
+                    <li><strong>FashionMNIST</strong>: 服装分类（10种服装类型）</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h6>推荐模型结构</h6>
+                <div class="model-structure">
+                    <p class="mb-2">基础结构：</p>
+                    <code>Conv2D → ReLU → MaxPool2D → Conv2D → ReLU → MaxPool2D → Flatten → Linear</code>
+                    <p class="mt-2 small text-muted">此结构适用于所有支持的数据集</p>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h6>模型层说明</h6>
+                <ul>
+                    <li><strong>Conv2D</strong>: 卷积层，提取图像特征</li>
+                    <li><strong>ReLU</strong>: 激活函数，增加非线性</li>
+                    <li><strong>MaxPool2D</strong>: 池化层，压缩特征</li>
+                    <li><strong>Flatten</strong>: 展平层，转换维度</li>
+                    <li><strong>Linear</strong>: 全连接层，分类预测</li>
+                    <li><strong>Dropout</strong>: 随机丢弃，防止过拟合</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h6>参数配置</h6>
+                <ul>
+                    <li><strong>学习率</strong>: 建议范围 0.1 ~ 0.0001</li>
+                    <li><strong>批次大小</strong>: 建议范围 32 ~ 128</li>
+                    <li><strong>训练轮数</strong>: 建议范围 5 ~ 20</li>
+                    <li><strong>早停耐心值</strong>: 建议范围 3 ~ 10</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h6>操作技巧</h6>
+                <ul>
+                    <li>拖动 ⋮ 可以调整组件顺序</li>
+                    <li>点击 × 可以删除不需要的组件</li>
+                    <li>点击组件名称可以配置参数</li>
+                    <li>预处理和参数配置都有默认值</li>
+                    <li>可以随时打开此帮助查看说明</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h6>常见问题</h6>
+                <div class="accordion" id="faqAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="faq1Header">
+                            <button class="accordion-button collapsed" type="button" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#faq1" 
+                                    aria-expanded="false" 
+                                    aria-controls="faq1">
+                                为什么需要Flatten层？
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse" 
+                             aria-labelledby="faq1Header" 
+                             data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                卷积层输出的是多维特征图，而全连接层需要一维输入。Flatten层的作用就是将多维特征展平成一维。
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="faq2Header">
+                            <button class="accordion-button collapsed" type="button" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#faq2" 
+                                    aria-expanded="false" 
+                                    aria-controls="faq2">
+                                如何提高模型准确率？
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse" 
+                             aria-labelledby="faq2Header" 
+                             data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li>增加卷积层数量</li>
+                                    <li>调整卷积核大小</li>
+                                    <li>添加数据增强</li>
+                                    <li>使用Dropout防止过拟合</li>
+                                    <li>调整学习率和批次大小</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="faq3Header">
+                            <button class="accordion-button collapsed" type="button" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#faq3" 
+                                    aria-expanded="false" 
+                                    aria-controls="faq3">
+                                为什么要使用数据增强？
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse" 
+                             aria-labelledby="faq3Header" 
+                             data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                数据增强可以：
+                                <ul>
+                                    <li>增加训练数据的多样性</li>
+                                    <li>提高模型的泛化能力</li>
+                                    <li>减少过拟合的风险</li>
+                                    <li>提高模型在真实场景中的表现</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="faq4Header">
+                            <button class="accordion-button collapsed" type="button" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#faq4" 
+                                    aria-expanded="false" 
+                                    aria-controls="faq4">
+                                什么是早停耐心值？
+                            </button>
+                        </h2>
+                        <div id="faq4" class="accordion-collapse collapse" 
+                             aria-labelledby="faq4Header" 
+                             data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                早停耐心值用于防止过拟合：
+                                <ul>
+                                    <li>监控验证集上的性能</li>
+                                    <li>当性能连续多轮未改善时停止训练</li>
+                                    <li>耐心值越大，训练时间可能越长</li>
+                                    <li>建议值：3-10之间</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <div class="container">
             <a class="navbar-brand" href="/">AI工具链可视化</a>
@@ -20,27 +193,6 @@
     </nav>
 
     <div class="container mt-4">
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">欢迎使用AI工具链可视化平台</h5>
-                        <p class="card-text">
-                            这是一个简单的深度学习模型构建和训练平台，专门用于手写数字识别（MNIST数据集）。
-                            您可以通过拖拽组件来构建模型，系统会自动处理层与层之间的连接。
-                        </p>
-                        <h6>快速入门：</h6>
-                        <ol>
-                            <li>从左侧组件库中拖拽组件到工作区</li>
-                            <li>推荐的模型结构：Conv2D -> ReLU -> MaxPool2D -> Conv2D -> ReLU -> MaxPool2D -> Flatten -> Linear</li>
-                            <li>点击"开始训练"按钮开始训练模型</li>
-                            <li>训练完成后，可以在"模型推理"页面测试模型效果</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="row">
             <div class="col-md-3">
                 <div id="component-library" class="card">
@@ -48,15 +200,86 @@
                         <h5 class="card-title">组件库</h5>
                         <div id="datasets">
                             <h6 class="section-title">数据集</h6>
-                            <!-- 动态加载数据集组件 -->
+                            <div class="draggable-section">
+                                <!-- 动态加载数据集组件 -->
+                            </div>
+                        </div>
+                        <div id="preprocessing">
+                            <h6 class="section-title">数据预处理</h6>
+                            <div class="draggable-section">
+                                <div class="draggable config-component" data-type="augmentation">
+                                    <span class="component-name">数据增强</span>
+                                    <div class="config-options" style="display: none;">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="augmentation" value="RandomRotation">
+                                            <label class="form-check-label">随机旋转</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="augmentation" value="RandomHorizontalFlip">
+                                            <label class="form-check-label">水平翻转</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="augmentation" value="RandomCrop">
+                                            <label class="form-check-label">随机裁剪</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="augmentation" value="ColorJitter">
+                                            <label class="form-check-label">颜色抖动</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="draggable config-component" data-type="normalization">
+                                    <span class="component-name">归一化</span>
+                                    <div class="config-options" style="display: none;">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="normalization" value="StandardNormalization" checked>
+                                            <label class="form-check-label">标准化</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="normalization" value="MinMaxNormalization">
+                                            <label class="form-check-label">最小最大值归一化</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div id="modules">
-                            <h6 class="section-title">模型模块</h6>
-                            <!-- 动态加载模型模块组件 -->
+                            <h6 class="section-title">模型层</h6>
+                            <div class="draggable-section">
+                                <!-- 动态加载模型模块组件 -->
+                            </div>
+                        </div>
+                        <div id="training-params">
+                            <h6 class="section-title">训练参数</h6>
+                            <div class="draggable-section">
+                                <div class="draggable config-component" data-type="training-params">
+                                    <span class="component-name">基础参数</span>
+                                    <div class="config-options" style="display: none;">
+                                        <div class="form-group">
+                                            <label>学习率</label>
+                                            <input type="number" class="form-control" name="learning-rate" placeholder="默认: 0.001" step="0.0001">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>批次大小</label>
+                                            <input type="number" class="form-control" name="batch-size" placeholder="默认: 64">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>训练轮数</label>
+                                            <input type="number" class="form-control" name="epochs" placeholder="默认: 5">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>早停耐心值</label>
+                                            <input type="number" class="form-control" name="early-stopping-patience" placeholder="默认: 5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div id="saved-models">
                             <h6 class="section-title">已保存的模型</h6>
-                            <!-- 动态加载已保存的模型 -->
+                            <div class="draggable-section">
+                                <!-- 动态加载已保存的模型 -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -93,5 +316,170 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script>
+    $('#train-button').click(function() {
+        // 防止重复点击
+        if ($(this).prop('disabled')) return;
+        
+        console.log("开始收集配置...");
+        // 收集模型配置
+        var config = {
+            model_config: [],
+            dataset: '',
+            training_params: {
+                learning_rate: 0.001,
+                batch_size: 64,
+                epochs: 5,
+                early_stopping_patience: 5
+            },
+            preprocessing: {
+                augmentation: [],
+                normalization: null
+            }
+        };
+
+        // 首先获取数据集
+        var datasetComponent = $('#drop-area .dropped-component[data-type="dataset"]');
+        console.log("找到的数据集组件数量:", datasetComponent.length);
+        console.log("所有组件:", $('#drop-area .dropped-component').map(function() {
+            return $(this).data('type') + ': ' + $(this).find('.component-name').text();
+        }).get());
+        
+        if (datasetComponent.length > 0) {
+            var datasetName = datasetComponent.first().find('.component-name').text().trim();
+            console.log("原始数据集名称:", datasetName);
+            
+            // 确保使用正确的数据集名称格式
+            const validDatasets = ['MNIST', 'CIFAR10', 'FashionMNIST'];
+            if (validDatasets.includes(datasetName)) {
+                config.dataset = datasetName;
+                console.log("设置数据集为:", config.dataset);
+            } else {
+                console.error('无效的数据集名称:', datasetName);
+                console.error('有效的数据集名称:', validDatasets);
+                alert('无效的数据集名称：' + datasetName);
+                return;
+            }
+        } else {
+            console.error('未找到数据集组件');
+            alert('请先添加数据集！');
+            return;
+        }
+
+        // 收集模型层配置（只收集真正的模型层）
+        var validModules = ['Conv2D', 'MaxPool2D', 'ReLU', 'Flatten', 'Linear', 'Dropout'];
+        
+        $('#drop-area .dropped-component').each(function() {
+            var type = $(this).data('type');
+            var name = $(this).find('.component-name').text();
+            
+            console.log("处理组件:", type, name);
+            
+            if (type === 'module' && validModules.includes(name)) {
+                var params = {};
+                $(this).find('.config-options input').each(function() {
+                    var paramName = $(this).attr('name');
+                    var value = $(this).val();
+                    if (value) {
+                        params[paramName] = parseFloat(value);
+                    }
+                });
+                
+                config.model_config.push({
+                    'type': name,
+                    'params': params
+                });
+                console.log("添加模型层:", name);
+            } else if (type === 'augmentation') {
+                $(this).find('input:checked').each(function() {
+                    config.preprocessing.augmentation.push($(this).val());
+                });
+            } else if (type === 'normalization') {
+                config.preprocessing.normalization = $(this).find('input:checked').val();
+            } else if (type === 'training-params') {
+                $(this).find('input').each(function() {
+                    var name = $(this).attr('name');
+                    var value = $(this).val();
+                    if (value) {
+                        config.training_params[name.replace('-', '_')] = parseFloat(value);
+                    }
+                });
+            }
+        });
+
+        // 最终验证
+        if (!config.dataset) {
+            console.error("最终配置中缺少数据集:", config);
+            alert('配置中缺少数据集，请检查！');
+            return;
+        }
+
+        console.log("发送的完整配置:", config);
+        
+        // 禁用训练按钮
+        $('#train-button').prop('disabled', true).text('训练中...');
+        
+        // 重置并显示进度条
+        $('#training-progress .progress-bar')
+            .css('width', '0%')
+            .text('0%');
+        $('#training-progress').show();
+
+        // 开始轮询训练进度
+        var progressCheck = setInterval(function() {
+            $.get('/training_progress', function(data) {
+                var progress = data.progress;
+                $('#training-progress .progress-bar')
+                    .css('width', progress + '%')
+                    .text(progress + '%');
+                
+                if (progress >= 100) {
+                    clearInterval(progressCheck);
+                }
+            });
+        }, 1000);
+        
+        // 清除之前的请求
+        if (window.currentTrainingRequest) {
+            window.currentTrainingRequest.abort();
+        }
+        
+        // 发送新的训练请求
+        window.currentTrainingRequest = $.ajax({
+            url: '/train',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(config),
+            success: function(response) {
+                clearInterval(progressCheck);  // 清除进度检查
+                if (response.status === 'success') {
+                    // 设置进度条为100%
+                    $('#training-progress .progress-bar')
+                        .css('width', '100%')
+                        .text('100%');
+                    alert('训练完成！\n模型准确率: ' + response.accuracy.toFixed(2) + '%\n模型已保存为：' + response.model_name);
+                    window.location.href = response.redirect_url;
+                } else {
+                    alert('训练失败：' + response.message);
+                }
+            },
+            error: function(xhr) {
+                clearInterval(progressCheck);  // 清除进度检查
+                if (xhr.statusText !== 'abort') {
+                    console.error('训练错误:', xhr.responseJSON);
+                    alert('训练过程中出现错误：' + (xhr.responseJSON ? xhr.responseJSON.message : '未知错误'));
+                }
+            },
+            complete: function() {
+                $('#train-button').prop('disabled', false).text('开始训练');
+                window.currentTrainingRequest = null;
+                // 如果是中止请求，隐藏进度条
+                if (xhr && xhr.statusText === 'abort') {
+                    $('#training-progress').hide();
+                }
+            }
+        });
+    });
+    </script>
 </body>
 </html>

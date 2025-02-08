@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>模型推理</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         #canvas {
             border: 2px solid #000;
@@ -12,6 +13,300 @@
         }
         .tools {
             margin: 20px 0;
+        }
+        .example-image {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            margin: 5px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .example-image:hover {
+            border-color: #007bff;
+        }
+        .model-info {
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+        .model-structure {
+            font-family: monospace;
+            white-space: pre;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .form-group {
+            position: relative;
+        }
+        #model-select {
+            position: relative;
+            z-index: 2000;
+        }
+        #model-select option {
+            position: relative;
+            z-index: 2000;
+            background-color: white;
+        }
+        .card {
+            position: relative;
+            z-index: auto;
+        }
+        .inference-interface {
+            position: relative;
+            z-index: auto;
+        }
+        .example-images {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        .example-item {
+            transition: transform 0.2s;
+            position: relative;
+            z-index: 1;
+        }
+        .example-item:hover {
+            transform: scale(1.1);
+            z-index: 2;
+        }
+        .example-image {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 2px;
+            background: white;
+            display: block;
+        }
+        .selected-example {
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+        #prediction-result {
+            position: relative;
+            z-index: 1;
+            margin-top: 20px;
+        }
+        #model-info {
+            position: relative;
+            z-index: 1;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        /* 统一处理所有下拉菜单和弹出层的层级 */
+        .dropdown-menu,
+        .form-select,
+        .form-select option,
+        .config-options,
+        .ui-selectmenu-menu,
+        .ui-autocomplete,
+        select[multiple] {
+            position: absolute;
+            z-index: 9999 !important;
+        }
+        
+        /* 确保下拉菜单容器不会被其他元素遮挡 */
+        .form-group,
+        .dropdown,
+        .select-container {
+            position: relative;
+            z-index: 9999 !important;
+        }
+        
+        /* 重置其他元素的z-index，避免干扰下拉菜单 */
+        .card,
+        .inference-interface,
+        .example-images,
+        .example-item,
+        #prediction-result,
+        #model-info {
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* 确保模态框和提示框显示在下拉菜单之上 */
+        .modal,
+        .tooltip,
+        .popover {
+            z-index: 10000 !important;
+        }
+        
+        /* 修复下拉菜单位置 */
+        .form-select {
+            position: relative;
+            display: block;
+            width: 100%;
+        }
+        
+        /* 确保下拉选项正确显示 */
+        .form-select option,
+        .form-select optgroup {
+            position: relative;
+            z-index: 10000 !important;
+            background-color: white;
+        }
+        
+        /* 下拉菜单打开时的样式 */
+        .form-select:focus,
+        .form-select.show,
+        .dropdown.show .dropdown-menu {
+            position: relative;
+            z-index: 10000 !important;
+        }
+        
+        /* 覆盖Bootstrap的默认z-index */
+        .dropdown-menu.show {
+            position: absolute;
+            z-index: 10000 !important;
+        }
+        
+        /* 绘图区域样式 */
+        .drawing-area {
+            display: inline-block;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        #mnist-canvas {
+            border: 2px solid #000;
+            cursor: crosshair;
+            background: black;
+        }
+        
+        /* 分隔线样式 */
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #6c757d;
+        }
+        
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .divider-text {
+            padding: 0 1rem;
+        }
+        
+        /* 模型选择样式 */
+        #model-select {
+            max-width: 400px;
+        }
+        
+        /* 数据集标签 */
+        .dataset-badge {
+            font-size: 0.8em;
+            padding: 0.2em 0.6em;
+            border-radius: 10px;
+            margin-left: 0.5em;
+        }
+        
+        .dataset-badge.mnist {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+        
+        .dataset-badge.cifar10 {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .dataset-badge.fashion {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* 添加新的样式 */
+        .interface-container {
+            display: none;
+        }
+        
+        .drawing-board {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        #mnist-canvas {
+            border: 2px solid #000;
+            cursor: crosshair;
+            background: black;
+            margin-bottom: 10px;
+        }
+        
+        .example-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .model-badge {
+            display: inline-block;
+            padding: 0.25em 0.6em;
+            border-radius: 10px;
+            font-size: 0.9em;
+            margin-left: 8px;
+        }
+        
+        /* 添加模态框样式 */
+        .example-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .example-modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            position: relative;
+        }
+        
+        .example-modal-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .example-modal-image {
+            max-width: 100%;
+            max-height: 60vh;
+            object-fit: contain;
+        }
+
+        .dataset-card {
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .dataset-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
     </style>
 </head>
@@ -26,63 +321,203 @@
     </nav>
 
     <div class="container mt-4">
-        <div class="row">
-            <div class="col-md-6 offset-md-3">
-                <div class="card">
+        <!-- 数据集选择卡片 -->
+        <div class="row mb-4" id="dataset-selection">
+            <div class="col-md-4">
+                <div class="card h-100 dataset-card" data-dataset="mnist">
                     <div class="card-body">
-                        <h5 class="card-title">手写数字识别</h5>
-                        <p class="card-text">在下方画板上用鼠标写一个数字（0-9），然后点击识别按钮。</p>
-                        
-                        <div class="text-center">
-                            <canvas id="canvas" width="280" height="280"></canvas>
-                            
-                            <div class="tools">
-                                <button id="clear-button" class="btn btn-secondary">清除</button>
-                                <button id="predict-button" class="btn btn-primary">识别</button>
-                            </div>
+                        <h5 class="card-title">手写数字识别 (MNIST)</h5>
+                        <p class="card-text">识别手写数字（0-9），支持手绘输入</p>
+                        <button class="btn btn-primary" onclick="selectDataset('mnist')">开始使用</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 dataset-card" data-dataset="cifar10">
+                    <div class="card-body">
+                        <h5 class="card-title">物体识别 (CIFAR10)</h5>
+                        <p class="card-text">识别10种常见物体，如飞机、汽车、猫等</p>
+                        <button class="btn btn-primary" onclick="selectDataset('cifar10')">开始使用</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 dataset-card" data-dataset="fashion">
+                    <div class="card-body">
+                        <h5 class="card-title">服装分类 (Fashion MNIST)</h5>
+                        <p class="card-text">识别10种不同类型的服装和配饰</p>
+                        <button class="btn btn-primary" onclick="selectDataset('fashion')">开始使用</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                            <!-- 添加预处理预览 -->
-                            <div class="preview mt-3">
-                                <p class="small text-muted">预处理后的图像预览 (28x28):</p>
-                                <canvas id="preview-canvas" width="28" height="28" style="border:1px solid #ccc; image-rendering: pixelated; width: 112px; height: 112px;"></canvas>
-                            </div>
+        <!-- 推理界面 -->
+        <div id="inference-interface" style="display: none;">
+            <!-- 返回按钮 -->
+            <button class="btn btn-outline-secondary mb-3" onclick="showDatasetSelection()">
+                <i class="fas fa-arrow-left"></i> 返回选择数据集
+            </button>
 
-                            <div class="form-group">
-                                <label>选择模型:</label>
-                                <select id="model-select" class="form-control">
-                                    <!-- 动态加载模型列表 -->
-                                </select>
-                            </div>
+            <!-- 模型选择 -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">选择模型</h5>
+                    <select id="model-select" class="form-select">
+                        <option value="">请选择模型...</option>
+                    </select>
+                    <div id="model-info" class="mt-3" style="display: none;">
+                        <h6>模型结构</h6>
+                        <div class="model-structure bg-light p-3 rounded"></div>
+                    </div>
+                </div>
+            </div>
 
-                            <div id="prediction-result" class="mt-3">
-                                <!-- 显示预测结果 -->
+            <!-- MNIST手写数字识别界面 -->
+            <div id="mnist-interface" class="col-12" style="display: none;">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">手写数字识别</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="drawing-board">
+                                        <canvas id="mnist-canvas" width="280" height="280"></canvas>
+                                        <div class="btn-group">
+                                            <button class="btn btn-secondary" onclick="clearCanvas('mnist-canvas')">清除</button>
+                                            <button class="btn btn-primary" onclick="predict('mnist')">识别</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>示例图片</h6>
+                                    <div class="example-grid" id="mnist-examples"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+            
+            <!-- CIFAR10物体识别界面 -->
+            <div id="cifar10-interface" class="col-12" style="display: none;">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">物体识别</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="upload-section">
+                                        <input type="file" class="form-control mb-3" accept="image/*" 
+                                               onchange="handleImageUpload(event, 'cifar10')">
+                                        <div class="selected-image-container text-center" style="display: none;">
+                                            <img src="" alt="Selected image" class="img-fluid mb-3">
+                                            <button class="btn btn-primary" onclick="predict('cifar10')">识别</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>示例图片</h6>
+                                    <div class="example-grid" id="cifar10-examples"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Fashion MNIST服装分类界面 -->
+            <div id="fashion-interface" class="col-12" style="display: none;">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">服装分类</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="upload-section">
+                                        <input type="file" class="form-control mb-3" accept="image/*" 
+                                               onchange="handleImageUpload(event, 'fashion')">
+                                        <div class="selected-image-container text-center" style="display: none;">
+                                            <img src="" alt="Selected image" class="img-fluid mb-3">
+                                            <button class="btn btn-primary" onclick="predict('fashion')">识别</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>示例图片</h6>
+                                    <div class="example-grid" id="fashion-examples"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 预测结果显示区域 -->
+            <div class="col-12 mt-4">
+                <div id="prediction-result"></div>
+            </div>
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- 添加模态框 -->
+    <div id="example-modal" class="example-modal" style="display: none;">
+        <div class="example-modal-content">
+            <span class="example-modal-close">&times;</span>
+            <div class="text-center">
+                <img class="example-modal-image mb-3" src="" alt="Example">
+                <div class="example-modal-prediction"></div>
+                <button class="btn btn-primary mt-3" onclick="predictExample()">预测</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        $(document).ready(function() {
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
+        const CIFAR10_CLASSES = ['飞机', '汽车', '鸟', '猫', '鹿', '狗', '青蛙', '马', '船', '卡车'];
+        const FASHION_CLASSES = ['T恤', '裤子', '套头衫', '连衣裙', '外套', '凉鞋', '衬衫', '运动鞋', '包', '短靴'];
+
+        const DATASET_INFO = {
+            'MNIST': {
+                title: '手写数字识别',
+                classes: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+                description: '在画板上用鼠标写一个数字（0-9），或选择下方的示例图片',
+                examplePath: 'mnist'
+            },
+            'CIFAR10': {
+                title: '物体识别',
+                classes: ['飞机', '汽车', '鸟', '猫', '鹿', '狗', '青蛙', '马', '船', '卡车'],
+                description: '选择示例图片或上传自己的图片（32x32像素）',
+                examplePath: 'cifar10'
+            },
+            'FashionMNIST': {
+                title: '服装分类',
+                classes: ['T恤', '裤子', '套头衫', '连衣裙', '外套', '凉鞋', '衬衫', '运动鞋', '包', '靴子'],
+                description: '选择示例图片或上传自己的图片（28x28像素）',
+                examplePath: 'fashion'
+            }
+        };
+
+        // 初始化MNIST画布
+        let mnistCanvas, mnistCtx;
+        function initMnistCanvas() {
+            mnistCanvas = document.getElementById('mnist-canvas');
+            if (!mnistCanvas) return;
+            
+            mnistCtx = mnistCanvas.getContext('2d');
+            mnistCtx.fillStyle = 'black';
+            mnistCtx.fillRect(0, 0, mnistCanvas.width, mnistCanvas.height);
+            mnistCtx.strokeStyle = 'white';
+            mnistCtx.lineWidth = 20;
+            mnistCtx.lineCap = 'round';
+
             let isDrawing = false;
             let lastX = 0;
             let lastY = 0;
 
-            // 设置画笔样式
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 15;
-            ctx.lineCap = 'round';
-
-            // 鼠标事件处理
-            canvas.addEventListener('mousedown', startDrawing);
-            canvas.addEventListener('mousemove', draw);
-            canvas.addEventListener('mouseup', stopDrawing);
-            canvas.addEventListener('mouseout', stopDrawing);
+            mnistCanvas.addEventListener('mousedown', startDrawing);
+            mnistCanvas.addEventListener('mousemove', draw);
+            mnistCanvas.addEventListener('mouseup', stopDrawing);
+            mnistCanvas.addEventListener('mouseout', stopDrawing);
 
             function startDrawing(e) {
                 isDrawing = true;
@@ -91,113 +526,424 @@
 
             function draw(e) {
                 if (!isDrawing) return;
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(e.offsetX, e.offsetY);
-                ctx.stroke();
+                mnistCtx.beginPath();
+                mnistCtx.moveTo(lastX, lastY);
+                mnistCtx.lineTo(e.offsetX, e.offsetY);
+                mnistCtx.stroke();
                 [lastX, lastY] = [e.offsetX, e.offsetY];
             }
 
             function stopDrawing() {
                 isDrawing = false;
             }
+        }
 
-            // 清除画板
-            $('#clear-button').click(function() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // 清除画布
+        function clearCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 处理图片上传
+        function handleImageUpload(event, dataset) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const container = $(`#${dataset}-interface .selected-image-container`);
+                    container.find('img').attr('src', e.target.result);
+                    container.show();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 选择示例图片
+        function selectExample(img, dataset) {
+            $('.example-image').removeClass('selected-example');
+            $(img).addClass('selected-example');
+            
+            const container = $(`#${dataset}-interface .selected-image-container`);
+            container.find('img').attr('src', img.src);
+            container.show();
+        }
+
+        // 加载示例图片
+        function loadExampleImages(dataset) {
+            const container = $(`#${dataset}-examples`);
+            container.empty();
+            
+            const path = `/static/examples/${dataset}`;
+            const classes = dataset === 'cifar10' ? CIFAR10_CLASSES :
+                          dataset === 'fashion' ? FASHION_CLASSES :
+                          Array.from({length: 10}, (_, i) => String(i));
+            
+            classes.forEach((className, i) => {
+                container.append(`
+                    <div class="example-item text-center">
+                        <img src="${path}/${i}.png" 
+                             class="example-image img-fluid" 
+                             onclick="showExampleModal(this, '${dataset}', '${className}')"
+                             title="${className}">
+                        <small class="text-muted">${className}</small>
+                    </div>
+                `);
             });
+        }
 
-            // 加载模型列表
-            $.get('/get_components', function(data) {
-                var models = data.saved_models;
-                for (var i = 0; i < models.length; i++) {
-                    $('#model-select').append('<option value="' + models[i] + '">' + models[i] + '</option>');
+        // 预测函数
+        function predict(dataset) {
+            const modelName = $('#model-select').val();
+            if (!modelName) {
+                alert('请先选择模型！');
+                return;
+            }
+
+            // 检查模型是否匹配当前数据集
+            let expectedDataset;
+            switch(dataset.toLowerCase()) {
+                case 'mnist':
+                    expectedDataset = 'MNIST';
+                    break;
+                case 'cifar10':
+                    expectedDataset = 'CIFAR10';
+                    break;
+                case 'fashion':
+                    expectedDataset = 'FashionMNIST';
+                    break;
+                default:
+                    console.error('Unknown dataset:', dataset);
+                    alert('未知的数据集类型');
+                    return;
+            }
+            
+            // 检查模型名称是否匹配数据集
+            if (!modelName.startsWith(expectedDataset)) {
+                alert(`请选择 ${dataset.toUpperCase()} 数据集的模型进行预测！`);
+                return;
+            }
+
+            let imageData;
+            if (dataset === 'mnist') {
+                // 获取MNIST画布数据
+                const canvas = document.getElementById('mnist-canvas');
+                imageData = canvas.toDataURL('image/png');
+            } else {
+                // 获取选中的图片
+                const container = $(`#${dataset}-interface .selected-image-container`);
+                const img = container.find('img')[0];
+                if (!img.src) {
+                    alert('请先选择或上传图片！');
+                    return;
+                }
+                imageData = img.src;
+            }
+
+            // 创建表单数据
+            const formData = new FormData();
+            formData.append('image', dataURLtoBlob(imageData));
+            formData.append('model_name', modelName);
+
+            // 发送预测请求
+            $.ajax({
+                url: '/inference',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    let className = response.prediction;
+                    if (response.dataset === 'CIFAR10') {
+                        className = CIFAR10_CLASSES[response.prediction];
+                    } else if (response.dataset === 'FashionMNIST') {
+                        className = FASHION_CLASSES[response.prediction];
+                    }
+                    
+                    $('#prediction-result').html(`
+                        <div class="alert alert-success">
+                            <h6 class="mb-0">预测结果</h6>
+                            <strong class="fs-4">${className}</strong>
+                        </div>
+                    `);
+                },
+                error: function() {
+                    $('#prediction-result').html(`
+                        <div class="alert alert-danger">预测失败，请重试</div>
+                    `);
                 }
             });
+        }
 
-            // 预测按钮点击事件
-            $('#predict-button').click(function() {
-                // 获取画布数据
-                var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                var tempCanvas = document.createElement('canvas');
-                var tempCtx = tempCanvas.getContext('2d');
-                tempCanvas.width = 28;
-                tempCanvas.height = 28;
+        // 辅助函数：将Data URL转换为Blob
+        function dataURLtoBlob(dataURL) {
+            const arr = dataURL.split(',');
+            const mime = arr[0].match(/:(.*?);/)[1];
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while(n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            return new Blob([u8arr], {type: mime});
+        }
 
-                // 居中处理
-                var bounds = getBoundingBox(imageData);
-                var scale = Math.min(
-                    20 / (bounds.maxX - bounds.minX),
-                    20 / (bounds.maxY - bounds.minY)
-                );
-                var offsetX = (28 - (bounds.maxX - bounds.minX) * scale) / 2;
-                var offsetY = (28 - (bounds.maxY - bounds.minY) * scale) / 2;
+        $(document).ready(function() {
+            // 加载模型列表
+            $.get('/get_models', function(models) {
+                updateModelSelect(models);
+            });
 
-                // 绘制缩放和居中后的图像
-                tempCtx.fillStyle = 'black';
-                tempCtx.fillRect(0, 0, 28, 28);
-                tempCtx.fillStyle = 'white';
-                tempCtx.translate(offsetX, offsetY);
-                tempCtx.scale(scale, scale);
-                tempCtx.translate(-bounds.minX, -bounds.minY);
-                tempCtx.drawImage(canvas, 0, 0);
+            // 模型选择变化时的处理
+            $('#model-select').change(function() {
+                const modelName = $(this).val();
+                console.log('Selected model:', modelName);
+                if (!modelName) {
+                    // 隐藏所有界面和模型信息
+                    $('#model-info').hide();
+                    return;
+                }
 
-                // 添加图像处理函数
-                function getBoundingBox(imageData) {
-                    var minX = canvas.width;
-                    var minY = canvas.height;
-                    var maxX = 0;
-                    var maxY = 0;
+                $.get(`/model_info/${modelName}`, function(info) {
+                    console.log('Model info:', info);
+                    $('#model-info').show().find('.model-structure').text(info.structure);
                     
-                    for (var y = 0; y < canvas.height; y++) {
-                        for (var x = 0; x < canvas.width; x++) {
-                            var i = (y * canvas.width + x) * 4;
-                            if (imageData.data[i] > 0) { // 检查白色像素
-                                minX = Math.min(minX, x);
-                                minY = Math.min(minY, y);
-                                maxX = Math.max(maxX, x);
-                                maxY = Math.max(maxY, y);
-                            }
+                    console.log('Showing interface for:', info.dataset);
+                    // 清空之前的预测结果
+                    $('#prediction-result').empty();
+                    
+                    // 重新加载当前界面的示例图片
+                    const currentDataset = getCurrentDataset();
+                    if (currentDataset) {
+                        loadExampleImages(currentDataset);
+                        if (currentDataset === 'mnist') {
+                            clearCanvas('mnist-canvas');
+                        } else {
+                            $(`#${currentDataset}-interface .selected-image-container`).hide();
                         }
                     }
-                    return {minX, minY, maxX, maxY};
-                }
-
-                // 显示预处理后的图像（调试用）
-                var previewCanvas = document.getElementById('preview-canvas');
-                if (previewCanvas) {
-                    var previewCtx = previewCanvas.getContext('2d');
-                    previewCtx.clearRect(0, 0, 28, 28);
-                    previewCtx.drawImage(tempCanvas, 0, 0);
-                }
-
-                tempCanvas.toBlob(function(blob) {
-                    var formData = new FormData();
-                    formData.append('image', blob, 'drawing.png');
-                    formData.append('model_name', $('#model-select').val());
-
-                    $.ajax({
-                        url: '/inference',
-                        type: 'POST',
-                        data: formData,
-                        processData: false,
-                        contentType: false,
-                        success: function(data) {
-                            $('#prediction-result').html(
-                                '<div class="alert alert-success">' +
-                                '预测结果: <strong>' + data.prediction + '</strong>' +
-                                '</div>'
-                            );
-                        },
-                        error: function() {
-                            $('#prediction-result').html(
-                                '<div class="alert alert-danger">预测失败，请重试</div>'
-                            );
-                        }
-                    });
+                }).fail(function(error) {
+                    console.error('Error fetching model info:', error);
+                    alert('获取模型信息失败，请重试');
                 });
             });
+
+            // 添加一个辅助函数来获取当前显示的数据集
+            function getCurrentDataset() {
+                if ($('#mnist-interface').is(':visible')) return 'mnist';
+                if ($('#cifar10-interface').is(':visible')) return 'cifar10';
+                if ($('#fashion-interface').is(':visible')) return 'fashion';
+                return null;
+            }
+
+            // 初始化MNIST画布
+            initMnistCanvas();
         });
+
+        // 修改模型选择的显示方式
+        function updateModelSelect(models) {
+            $('#model-select').empty().append('<option value="">请选择要使用的模型...</option>');
+            
+            // 按数据集分组模型
+            const groupedModels = {
+                'MNIST': [],
+                'CIFAR10': [],
+                'FashionMNIST': []
+            };
+            
+            models.forEach(function(model) {
+                // 正确解析模型名称
+                let dataset;
+                if (model.startsWith('MNIST_')) {
+                    dataset = 'MNIST';
+                } else if (model.startsWith('CIFAR10_')) {
+                    dataset = 'CIFAR10';
+                } else if (model.startsWith('FashionMNIST_')) {
+                    dataset = 'FashionMNIST';
+                }
+                
+                // 提取准确率
+                const accMatch = model.match(/acc(\d+\.?\d*)/);
+                const acc = accMatch ? accMatch[1] : '0';
+                
+                if (dataset && groupedModels[dataset]) {
+                    groupedModels[dataset].push({model, acc});
+                }
+            });
+            
+            // 为每个数据集创建一个选项组
+            Object.entries(groupedModels).forEach(([dataset, models]) => {
+                if (models.length > 0) {
+                    const group = $('<optgroup>', {
+                        label: `${dataset} 模型`
+                    });
+                    
+                    // 按准确率排序
+                    models.sort((a, b) => parseFloat(b.acc) - parseFloat(a.acc));
+                    
+                    models.forEach(({model, acc}) => {
+                        group.append(`
+                            <option value="${model}">
+                                准确率: ${acc}% (${model})
+                            </option>
+                        `);
+                    });
+                    
+                    $('#model-select').append(group);
+                }
+            });
+        }
+
+        // 显示示例图片模态框
+        function showExampleModal(img, dataset, className) {
+            const modal = $('#example-modal');
+            modal.find('.example-modal-image').attr('src', img.src);
+            modal.find('.example-modal-prediction').empty();
+            modal.data('dataset', dataset);
+            modal.data('imageData', img.src);
+            modal.show();
+        }
+
+        // 预测示例图片
+        function predictExample() {
+            const modal = $('#example-modal');
+            const dataset = modal.data('dataset');
+            const imageData = modal.data('imageData');
+            
+            const modelName = $('#model-select').val();
+            if (!modelName) {
+                alert('请先选择模型！');
+                return;
+            }
+
+            // 检查模型是否匹配当前数据集
+            let expectedDataset;
+            switch(dataset.toLowerCase()) {
+                case 'mnist':
+                    expectedDataset = 'MNIST';
+                    break;
+                case 'cifar10':
+                    expectedDataset = 'CIFAR10';
+                    break;
+                case 'fashion':
+                    expectedDataset = 'FashionMNIST';
+                    break;
+                default:
+                    console.error('Unknown dataset:', dataset);
+                    alert('未知的数据集类型');
+                    return;
+            }
+            
+            // 检查模型名称是否匹配数据集
+            if (!modelName.startsWith(expectedDataset)) {
+                alert(`请选择 ${dataset.toUpperCase()} 数据集的模型进行预测！`);
+                return;
+            }
+
+            const formData = new FormData();
+            // 从原始URL创建blob
+            fetch(imageData)
+                .then(res => res.blob())
+                .then(blob => {
+                    formData.append('image', blob);
+                    formData.append('model_name', modelName);
+
+                    // 发送预测请求
+                $.ajax({
+                    url: '/inference',
+                    type: 'POST',
+                    data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function(response) {
+                            let className = response.prediction;
+                            if (response.dataset === 'CIFAR10') {
+                                className = CIFAR10_CLASSES[response.prediction];
+                            } else if (response.dataset === 'FashionMNIST') {
+                                className = FASHION_CLASSES[response.prediction];
+                            }
+                            
+                            modal.find('.example-modal-prediction').html(`
+                                <div class="alert alert-success">
+                                    <h6 class="mb-0">预测结果</h6>
+                                    <strong class="fs-4">${className}</strong>
+                                </div>
+                            `);
+                        },
+                        error: function(xhr) {
+                            console.error('Prediction error:', xhr);
+                            modal.find('.example-modal-prediction').html(`
+                                <div class="alert alert-danger">预测失败，请重试</div>
+                            `);
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error processing image:', error);
+                    modal.find('.example-modal-prediction').html(`
+                        <div class="alert alert-danger">图片处理失败，请重试</div>
+                    `);
+                });
+        }
+
+        // 关闭模态框
+        $('.example-modal-close').click(function() {
+            $('#example-modal').hide();
+        });
+
+        // 点击模态框外部关闭
+        $(window).click(function(event) {
+            if (event.target.className === 'example-modal') {
+                $('#example-modal').hide();
+            }
+        });
+
+        // 修改数据集选择函数
+        function selectDataset(dataset) {
+            $('#dataset-selection').hide();
+            $('#inference-interface').show();
+            
+            // 只加载选中数据集的模型
+            $.get('/get_models', function(models) {
+                const filteredModels = models.filter(model => {
+                    // 根据数据集类型筛选模型
+                    switch(dataset.toUpperCase()) {
+                        case 'MNIST':
+                            return model.startsWith('MNIST_');
+                        case 'CIFAR10':
+                            return model.startsWith('CIFAR10_');
+                        case 'FASHION':
+                            return model.startsWith('FashionMNIST_');
+                        default:
+                            return false;
+                    }
+                });
+                updateModelSelect(filteredModels);
+            });
+            
+            // 显示对应的界面
+            $('#mnist-interface, #cifar10-interface, #fashion-interface').hide();
+            $(`#${dataset}-interface`).show();
+            
+            // 如果是MNIST，初始化画布
+            if (dataset === 'mnist') {
+                initMnistCanvas();
+                clearCanvas('mnist-canvas');
+            }
+            
+            // 加载示例图片
+            loadExampleImages(dataset);
+        }
+
+        function showDatasetSelection() {
+            $('#inference-interface').hide();
+            $('#dataset-selection').show();
+            // 清空选择和结果
+            $('#model-select').val('');
+            $('#model-info').hide();
+            $('#prediction-result').empty();
+        }
     </script>
 </body>
 </html>

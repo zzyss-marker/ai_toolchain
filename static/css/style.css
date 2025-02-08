@@ -53,11 +53,14 @@ h1 {
 
 .draggable {
     transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
 }
 
 .draggable:hover {
     transform: translateY(-2px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 2;
 }
 
 .saved-model {
@@ -69,7 +72,9 @@ h1 {
 }
 
 #model-visualization {
-    margin: 20px 0;
+    margin-top: 20px;
+    overflow: visible;
+    padding-bottom: 50px;
     min-height: 200px;
     border: 1px solid #ddd;
     border-radius: 5px;
@@ -179,4 +184,239 @@ h1 {
     border: 2px dashed #dee2e6;
     margin: 5px;
     height: 40px;
+}
+
+.draggable-section {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.config-component {
+    position: relative;
+}
+
+.config-component .component-name {
+    cursor: pointer;
+    display: inline-block;
+}
+
+.config-component .text-muted {
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
+.config-component .config-options {
+    position: absolute !important;
+    top: 100%;
+    left: 0;
+    z-index: 9999 !important;
+    width: 250px;
+    padding: 10px;
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: none;
+}
+
+.config-component .form-group {
+    margin-bottom: 10px;
+}
+
+.config-component .form-control {
+    font-size: 0.9rem;
+}
+
+.alert ul {
+    padding-left: 20px;
+}
+
+.draggable-section .draggable {
+    margin-bottom: 5px;
+}
+
+.dropped-component .config-options {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+/* 确保所有下拉菜单和配置选项显示在最顶层 */
+.dropdown-menu,
+.form-select,
+.form-select option,
+.config-options,
+.ui-selectmenu-menu,
+.ui-autocomplete,
+select[multiple] {
+    position: fixed !important;
+    z-index: 99999 !important;
+}
+
+/* 下拉菜单容器样式 */
+.form-group,
+.dropdown,
+.select-container {
+    position: relative;
+    z-index: 99999 !important;
+}
+
+/* 确保下拉菜单在拖拽和悬浮状态之上 */
+.form-select:focus,
+.form-select.active,
+.form-select.show {
+    position: relative;
+    z-index: 99999 !important;
+}
+
+/* 下拉菜单选项 */
+.form-select option {
+    position: relative;
+    z-index: 99999 !important;
+    background: white;
+}
+
+/* 禁用拖拽组件在下拉菜单打开时的悬浮效果 */
+.form-select:focus ~ .draggable,
+.form-select.active ~ .draggable,
+.form-select.show ~ .draggable {
+    pointer-events: none;
+}
+
+/* 帮助按钮样式 */
+.floating-help-button {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: #0056b3;
+    color: white;
+    border: none;
+    box-shadow: 0 3px 15px rgba(0,0,0,0.2);
+    cursor: pointer;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    transition: all 0.3s ease;
+}
+
+.floating-help-button:hover {
+    background-color: #007bff;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.25);
+}
+
+/* 帮助面板样式 */
+.help-panel {
+    position: fixed;
+    top: 50%;
+    right: -350px;
+    transform: translateY(-50%);
+    width: 350px;
+    max-height: 85vh;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: -2px 0 20px rgba(0,0,0,0.15);
+    z-index: 1001;
+    transition: right 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.help-panel.show {
+    right: 20px;
+}
+
+.help-header {
+    padding: 15px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.help-header h5 {
+    margin: 0;
+}
+
+.close-help-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6c757d;
+}
+
+.help-content {
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.help-section {
+    margin-bottom: 25px;
+}
+
+.help-section:last-child {
+    margin-bottom: 0;
+}
+
+.help-section h6 {
+    color: #0056b3;
+    font-weight: 600;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.help-section ul,
+.help-section ol {
+    padding-left: 20px;
+    margin-bottom: 10px;
+}
+
+.help-section li {
+    margin-bottom: 5px;
+}
+
+.model-structure {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    border-left: 4px solid #007bff;
+}
+
+.model-structure code {
+    color: #d63384;
+    word-wrap: break-word;
+}
+
+.accordion-button {
+    padding: 10px 15px;
+    font-size: 0.9rem;
+}
+
+.accordion-body {
+    padding: 15px;
+    font-size: 0.9rem;
+    background: #f8f9fa;
+}
+
+.node {
+    fill: #fff;
+    stroke: #000;
+    stroke-width: 1.5px;
+    overflow: visible;
+}
+
+.link {
+    fill: none;
+    stroke: #999;
+    stroke-width: 1.5px;
+    overflow: visible;
 }

@@ -12,19 +12,42 @@ import io
 import base64
 from utils import Net, train_model, test_model, plot_training_curve
 from PIL import Image
+from PIL import ImageOps
 import os
 import json
 import threading
+from torch.utils.data import random_split
+import torch.nn.functional as F
 
 app = Flask(__name__)
 
 # 全局变量存储训练曲线数据
 training_loss = []
 training_accuracy = []
+validation_loss = []
+validation_accuracy = []
 
 # 全局变量存储训练进度
 training_progress = 0
 progress_lock = threading.Lock()
+
+AVAILABLE_DATASETS = {
+    'MNIST': {
+        'loader': datasets.MNIST,
+        'input_shape': (1, 28, 28),
+        'num_classes': 10
+    },
+    'CIFAR10': {
+        'loader': datasets.CIFAR10,
+        'input_shape': (3, 32, 32),
+        'num_classes': 10
+    },
+    'FashionMNIST': {
+        'loader': datasets.FashionMNIST,
+        'input_shape': (1, 28, 28),
+        'num_classes': 10
+    }
+}
 
 @app.route('/')
 def index():
@@ -33,9 +56,13 @@ def index():
 @app.route('/get_components', methods=['GET'])
 def get_components():
     components = {
-        'datasets': ['MNIST'],
-        'modules': ['Conv2D', 'MaxPool2D', 'ReLU', 'Flatten', 'Linear'],
-        'saved_models': os.listdir('static/models') if os.path.exists('static/models') else []
+        'datasets': list(AVAILABLE_DATASETS.keys()),
+        'modules': ['Conv2D', 'MaxPool2D', 'ReLU', 'Flatten', 'Linear', 'Dropout'],
+        'saved_models': os.listdir('static/models') if os.path.exists('static/models') else [],
+        'preprocessing': {
+            'augmentation': ['RandomRotation', 'RandomHorizontalFlip', 'RandomCrop', 'ColorJitter'],
+            'normalization': ['StandardNormalization', 'MinMaxNormalization']
+        }
     }
     return jsonify(components)
 
@@ -43,45 +70,143 @@ def get_components():
 def train():
     try:
         data = request.get_json()
+        print("Received training request:", data)
+        
         model_config = data['model_config']
         training_params = data['training_params']
+        dataset_name = data.get('dataset')
+        preprocessing = data.get('preprocessing', {})
+
+        print(f"Received dataset name: {dataset_name}")
+        print(f"Available datasets: {list(AVAILABLE_DATASETS.keys())}")
+
+        # 验证数据集是否存在
+        if not dataset_name:
+            print("Dataset name is missing")  # 添加日志
+            return jsonify({'status': 'error', 'message': '未指定数据集'}), 400
+
+        # 验证数据集名称是否有效
+        if dataset_name not in AVAILABLE_DATASETS:
+            print(f"Invalid dataset name: {dataset_name}")
+            print(f"Valid dataset names: {list(AVAILABLE_DATASETS.keys())}")
+            return jsonify({'status': 'error', 
+                          'message': f'无效的数据集名称: {dataset_name}'}), 400
 
         if not model_config:
             return jsonify({'status': 'error', 'message': '请先添加模型层'}), 400
+
+        # 检查模型结构是否合理
+        has_flatten = False
+        has_linear = False
+        for layer in model_config:
+            if layer['type'] == 'Flatten':
+                has_flatten = True
+            elif layer['type'] == 'Linear':
+                has_linear = True
+                if not has_flatten:
+                    return jsonify({'status': 'error', 'message': 'Linear层前必须有Flatten层'}), 400
+
+        if not has_linear:
+            return jsonify({'status': 'error', 'message': '模型必须包含至少一个Linear层作为输出层'}), 400
 
         # 重置进度
         global training_progress
         training_progress = 0
 
+        # 构建数据预处理流程
+        transform_list = []
+        
+        # 添加数据增强
+        if 'augmentation' in preprocessing:
+            for aug in preprocessing['augmentation']:
+                if aug == 'RandomRotation':
+                    transform_list.append(transforms.RandomRotation(15))
+                elif aug == 'RandomHorizontalFlip':
+                    transform_list.append(transforms.RandomHorizontalFlip())
+                elif aug == 'RandomCrop':
+                    transform_list.append(transforms.RandomCrop(32, padding=4))
+                elif aug == 'ColorJitter':
+                    transform_list.append(transforms.ColorJitter(brightness=0.2, contrast=0.2))
+
+        # 添加基本转换
+        transform_list.append(transforms.ToTensor())
+        
+        # 添加标准化
+        if 'normalization' in preprocessing:
+            if preprocessing['normalization'] == 'StandardNormalization':
+                transform_list.append(transforms.Normalize((0.5,), (0.5,)))
+            elif preprocessing['normalization'] == 'MinMaxNormalization':
+                transform_list.append(transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min())))
+
+        transform = transforms.Compose(transform_list)
+
+        # 加载数据集
+        dataset_info = AVAILABLE_DATASETS[dataset_name]
+        full_dataset = dataset_info['loader']('./data', train=True, download=True, transform=transform)
+        test_dataset = dataset_info['loader']('./data', train=False, download=True, transform=transform)
+
+        # 分割训练集和验证集
+        train_size = int(0.8 * len(full_dataset))
+        val_size = len(full_dataset) - train_size
+        train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=training_params['batch_size'], shuffle=True)
+        val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=training_params['batch_size'], shuffle=False)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=training_params['batch_size'], shuffle=False)
+
         # 构建模型
-        model = Net(model_config)
+        model = Net(model_config, input_shape=dataset_info['input_shape'], num_classes=dataset_info['num_classes'])
         optimizer = optim.Adam(model.parameters(), lr=training_params['learning_rate'])
         criterion = nn.CrossEntropyLoss()
 
-        # 数据加载
-        transform = transforms.Compose([transforms.ToTensor()])
-        train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
-        test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=training_params['batch_size'], shuffle=True)
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=training_params['batch_size'], shuffle=False)
+        # 添加学习率调度器
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True)
 
         # 训练模型
-        global training_loss, training_accuracy
-        training_loss, training_accuracy = train_model(model, train_loader, criterion, optimizer, 
-                                                     training_params['epochs'], update_progress)
+        global training_loss, training_accuracy, validation_loss, validation_accuracy
+        training_metrics = train_model(
+            model, train_loader, val_loader, criterion, optimizer, scheduler,
+            training_params['epochs'], update_progress,
+            patience=training_params.get('early_stopping_patience', 5)
+        )
+        
+        training_loss = training_metrics['train_loss']
+        training_accuracy = training_metrics['train_acc']
+        validation_loss = training_metrics['val_loss']
+        validation_accuracy = training_metrics['val_acc']
 
         # 测试模型
         test_acc = test_model(model, test_loader)
 
-        # 保存模型和配置
+        # 训练完成后保存模型
         if not os.path.exists('static/models'):
             os.makedirs('static/models')
-        model_name = 'model_{}.pth'.format(len(os.listdir('static/models')))
-        torch.save(model.state_dict(), 'static/models/' + model_name)
+
+        # 计算验证集准确率作为模型评分
+        val_acc = validation_accuracy[-1]
         
-        # 保存模型配置
-        with open(f'static/models/{model_name}_config.json', 'w') as f:
-            json.dump(model_config, f)
+        # 确保使用正确的数据集名称
+        model_prefix = {
+            'MNIST': 'MNIST',
+            'CIFAR10': 'CIFAR10',
+            'FashionMNIST': 'FashionMNIST'
+        }[dataset_name]
+
+        # 生成模型文件名
+        model_name = f'{model_prefix}_acc{val_acc:.1f}_{len(os.listdir("static/models"))}.pth'
+        
+        # 保存完整模型状态
+        save_dict = {
+            'model_state': model.state_dict(),
+            'model_config': model_config,
+            'dataset': model_prefix,
+            'preprocessing': preprocessing,
+            'input_shape': dataset_info['input_shape'],
+            'num_classes': dataset_info['num_classes']
+        }
+        
+        print(f"Saving model for dataset: {model_prefix} as {model_name}")
+        torch.save(save_dict, f'static/models/{model_name}')
 
         return jsonify({
             'status': 'success', 
@@ -89,6 +214,7 @@ def train():
             'accuracy': test_acc,
             'redirect_url': url_for('training_results')
         })
+
     except Exception as e:
         print(f"Training error: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -100,6 +226,31 @@ def training_results():
     acc_img = plot_training_curve(training_accuracy, 'Accuracy')
     return render_template('train.html', loss_img=loss_img, acc_img=acc_img)
 
+@app.route('/model_info/<model_name>')
+def model_info(model_name):
+    try:
+        model_path = f'static/models/{model_name}'
+        print(f"Loading model from: {model_path}")
+        model_data = torch.load(model_path)
+        
+        # 获取模型结构字符串
+        structure = []
+        for layer in model_data['model_config']:
+            params = layer['params']
+            param_str = ', '.join(f'{k}={v}' for k, v in params.items())
+            structure.append(f"{layer['type']}({param_str})")
+        
+        response = {
+            'dataset': model_data['dataset'],
+            'structure': '\n'.join(structure),
+            'input_shape': model_data['input_shape']
+        }
+        print(f"Returning model info: {response}")
+        return jsonify(response)
+    except Exception as e:
+        print(f"Error in model_info: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/inference', methods=['GET', 'POST'])
 def inference():
     if request.method == 'POST':
@@ -107,29 +258,89 @@ def inference():
             file = request.files['image']
             model_name = request.form.get('model_name')
 
-            # 加载模型配置
-            with open(f'static/models/{model_name}_config.json', 'r') as f:
-                model_config = json.load(f)
+            # 验证模型名称格式
+            if not model_name or not model_name.endswith('.pth'):
+                return jsonify({'error': '无效的模型名称'}), 400
+
+            # 从模型名称中提取数据集类型
+            dataset_type = None
+            # 打印模型名称用于调试
+            print(f"Processing model: {model_name}")
+            
+            if model_name.startswith('MNIST_'):
+                dataset_type = 'MNIST'
+            elif model_name.startswith('CIFAR10_'):
+                dataset_type = 'CIFAR10'
+            elif model_name.startswith('Fashion') or model_name.startswith('FASHION') or model_name.startswith('FashionMNIST_'):
+                dataset_type = 'FashionMNIST'
+            else:
+                print(f"Unable to determine dataset type from model name: {model_name}")
+                return jsonify({'error': '无法识别的模型类型'}), 400
+
+            print(f"Detected dataset type: {dataset_type}")
+
+            # 加载模型数据
+            model_path = f'static/models/{model_name}'
+            model_data = torch.load(model_path)
+            
+            # 验证模型数据中的数据集类型是否匹配
+            if model_data['dataset'] != dataset_type:
+                print(f"Dataset mismatch: Expected {dataset_type}, got {model_data['dataset']}")
+                return jsonify({'error': '模型数据集类型不匹配'}), 400
+            
+            # 验证输入形状是否匹配
+            expected_shape = AVAILABLE_DATASETS[dataset_type]['input_shape']
+            if model_data['input_shape'] != expected_shape:
+                print(f"Input shape mismatch: Expected {expected_shape}, got {model_data['input_shape']}")
+                return jsonify({'error': '模型输入形状不匹配'}), 400
 
             # 构建模型并加载参数
-            model = Net(model_config)
-            model.load_state_dict(torch.load('static/models/' + model_name))
+            model = Net(model_data['model_config'], 
+                       input_shape=model_data['input_shape'],
+                       num_classes=model_data['num_classes'])
+            model.load_state_dict(model_data['model_state'])
             model.eval()
 
             # 处理上传的图片
-            img = Image.open(file).convert('L')
-            # 确保图像是28x28
-            if img.size != (28, 28):
+            img = Image.open(file)
+            
+            # 根据数据集类型进行预处理
+            print(f"Processing image for dataset: {model_data['dataset']}")
+            if model_data['dataset'] == 'MNIST':
+                # 转换为灰度图
+                img = img.convert('L')
+                # 调整大小为28x28
                 img = img.resize((28, 28))
+                # 反转颜色（确保白色笔画在黑色背景上）
+                img = ImageOps.invert(img)
+            elif model_data['dataset'] == 'CIFAR10':
+                # 转换为RGB
+                img = img.convert('RGB')
+                # 调整大小为32x32
+                img = img.resize((32, 32))
+            elif model_data['dataset'] == 'FashionMNIST':
+                # 转换为灰度图
+                img = img.convert('L')
+                # 调整大小为28x28
+                img = img.resize((28, 28))
+                # 反转颜色
+                img = ImageOps.invert(img)
+            else:
+                return jsonify({'error': '不支持的数据集类型'}), 400
+
+            # 应用相同的预处理
+            transform_list = [transforms.ToTensor()]
+            if model_data['preprocessing'].get('normalization') == 'StandardNormalization':
+                transform_list.append(transforms.Normalize((0.5,), (0.5,)))
             
-            # 转换为张量并归一化
-            transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,))  # MNIST数据集的均值和标准差
-            ])
-            
-            img_tensor = transform(img)
-            img_tensor = img_tensor.unsqueeze(0)
+            transform = transforms.Compose(transform_list)
+            img_tensor = transform(img).unsqueeze(0)
+
+            # 验证张量形状
+            expected_shape = (1,) + model_data['input_shape']
+            if img_tensor.shape != expected_shape:
+                print(f"Tensor shape mismatch: Expected {expected_shape}, got {img_tensor.shape}")
+                return jsonify({'error': '图像处理后的形状不匹配'}), 400
 
             # 进行预测
             with torch.no_grad():
@@ -137,11 +348,16 @@ def inference():
                 pred = output.argmax(dim=1, keepdim=True)
                 prediction = pred.item()
 
-            return jsonify({'prediction': prediction})
+            print(f"Successful prediction for {model_data['dataset']}: {prediction}")
+            return jsonify({
+                'prediction': prediction,
+                'dataset': model_data['dataset']
+            })
         except Exception as e:
             print(f"Inference error: {str(e)}")
             return jsonify({'error': str(e)}), 500
-
+    
+    # GET 请求返回推理页面
     return render_template('inference.html')
 
 @app.route('/training_progress')
@@ -155,6 +371,61 @@ def update_progress(progress):
     with progress_lock:
         training_progress = progress
 
+@app.route('/generate_examples')
+def generate_examples():
+    try:
+        if not os.path.exists('static/examples'):
+            os.makedirs('static/examples/cifar10', exist_ok=True)
+            os.makedirs('static/examples/fashion', exist_ok=True)
+            os.makedirs('static/examples/mnist', exist_ok=True)
+
+        # 生成CIFAR10示例
+        cifar_dataset = datasets.CIFAR10('./data', train=True, download=True)
+        class_samples = {i: [] for i in range(10)}
+        for img, label in cifar_dataset:
+            if len(class_samples[label]) < 1:  # 每个类别取一个样本
+                img.save(f'static/examples/cifar10/{label}.png')
+                class_samples[label].append(True)
+            if all(len(samples) >= 1 for samples in class_samples.values()):
+                break
+
+        # 生成Fashion MNIST示例
+        fashion_dataset = datasets.FashionMNIST('./data', train=True, download=True)
+        class_samples = {i: [] for i in range(10)}
+        for img, label in fashion_dataset:
+            if len(class_samples[label]) < 1:
+                img.save(f'static/examples/fashion/{label}.png')
+                class_samples[label].append(True)
+            if all(len(samples) >= 1 for samples in class_samples.values()):
+                break
+
+        # 生成MNIST示例
+        mnist_dataset = datasets.MNIST('./data', train=True, download=True)
+        class_samples = {i: [] for i in range(10)}
+        for img, label in mnist_dataset:
+            if len(class_samples[label]) < 1:
+                img.save(f'static/examples/mnist/{label}.png')
+                class_samples[label].append(True)
+            if all(len(samples) >= 1 for samples in class_samples.values()):
+                break
+
+        return jsonify({'status': 'success', 'message': '示例图片生成完成'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/get_models')
+def get_models():
+    """获取所有保存的模型列表"""
+    try:
+        models_dir = 'static/models'
+        if not os.path.exists(models_dir):
+            return jsonify([])
+        
+        models = [f for f in os.listdir(models_dir) if f.endswith('.pth')]
+        return jsonify(models)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.errorhandler(404)
 def not_found_error(error):
     return jsonify({'error': 'Not found'}), 404
@@ -164,4 +435,13 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
+    # 启动时生成示例图片
+    try:
+        if not os.path.exists('static/examples'):
+            print("正在生成示例图片...")
+            generate_examples()
+            print("示例图片生成完成")
+    except Exception as e:
+        print(f"生成示例图片时出错: {str(e)}")
+    
     app.run(debug=True)

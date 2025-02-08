@@ -1,21 +1,65 @@
 $(document).ready(function() {
     // 获取组件列表
     $.get('/get_components', function(data) {
-        var datasets = data.datasets;
-        var modules = data.modules;
-        var saved_models = data.saved_models;
+        // 加载数据集
+        data.datasets.forEach(function(dataset) {
+            // 确保使用正确的数据集名称格式
+            let datasetName = dataset;
+            if (dataset === 'FashionMNIST') {
+                datasetName = 'FashionMNIST';  // 保持原始格式
+            }
+            $('#datasets .draggable-section').append(`
+                <div class="draggable" data-type="dataset">
+                    <span class="component-name">${datasetName}</span>
+                </div>
+            `);
+        });
 
-        for (var i = 0; i < datasets.length; i++) {
-            $('#datasets').append('<div class="draggable" data-type="dataset">' + datasets[i] + '</div>');
-        }
-        for (var i = 0; i < modules.length; i++) {
-            $('#modules').append('<div class="draggable" data-type="module">' + modules[i] + '</div>');
-        }
-        for (var i = 0; i < saved_models.length; i++) {
-            $('#saved-models').append('<div class="saved-model">' + saved_models[i] + '</div>');
-        }
+        // 加载模型层
+        data.modules.forEach(function(module) {
+            $('#modules .draggable-section').append(`
+                <div class="draggable config-component" data-type="module">
+                    <span class="component-name">${module}</span>
+                    ${module === 'Conv2D' ? `
+                        <div class="config-options" style="display: none;">
+                            <div class="form-group">
+                                <label>输出通道数</label>
+                                <input type="number" class="form-control" name="out_channels" value="32">
+                            </div>
+                            <div class="form-group">
+                                <label>卷积核大小</label>
+                                <input type="number" class="form-control" name="kernel_size" value="3">
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${module === 'Linear' ? `
+                        <div class="config-options" style="display: none;">
+                            <div class="form-group">
+                                <label>输出特征数</label>
+                                <input type="number" class="form-control" name="out_features" value="10">
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${module === 'Dropout' ? `
+                        <div class="config-options" style="display: none;">
+                            <div class="form-group">
+                                <label>丢弃率</label>
+                                <input type="number" class="form-control" name="p" value="0.5" step="0.1" min="0" max="1">
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `);
+        });
 
-        // 可拖拽组件
+        // 加载已保存的模型
+        data.saved_models.forEach(function(model) {
+            $('#saved-models .draggable-section').append(`
+                <div class="saved-model">${model}</div>
+            `);
+        });
+
+        // 初始化拖拽
         $('.draggable').draggable({
             helper: 'clone'
         });
@@ -25,15 +69,32 @@ $(document).ready(function() {
             accept: '.draggable',
             drop: function(event, ui) {
                 var type = ui.draggable.data('type');
-                var name = ui.draggable.text();
-                // 添加删除按钮和拖动手柄
-                $(this).append(
-                    `<div class="dropped-component" data-type="${type}">
+                var name = ui.draggable.find('.component-name').text();
+                var options = ui.draggable.find('.config-options').clone(true);
+                
+                // 如果是数据集类型，先移除已有的数据集组件
+                if (type === 'dataset') {
+                    $('#drop-area .dropped-component[data-type="dataset"]').remove();
+                }
+                
+                // 如果是预处理组件，确保只有一个
+                if (type === 'augmentation' || type === 'normalization') {
+                    $(`#drop-area .dropped-component[data-type="${type}"]`).remove();
+                }
+                
+                var component = $(`
+                    <div class="dropped-component" data-type="${type}">
                         <span class="drag-handle">⋮</span>
                         <span class="component-name">${name}</span>
                         <button class="remove-btn" title="删除">×</button>
-                    </div>`
-                );
+                    </div>
+                `);
+                
+                if (options.length) {
+                    component.append(options);
+                }
+                
+                $(this).append(component);
                 setTimeout(visualizeModel, 100);
             }
         });
@@ -104,77 +165,26 @@ $(document).ready(function() {
         setTimeout(visualizeModel, 100); // 延迟一下等待DOM更新
     });
 
-    // 修改训练按钮点击事件
-    $('#train-button').click(function() {
-        var components = $('#drop-area .dropped-component');
-        if (components.length === 0) {
-            alert('请先添加模型层！');
-            return;
+    // 添加配置组件的点击展开/收起
+    $(document).on('click', '.config-component .component-name', function(e) {
+        e.stopPropagation();
+        $(this).siblings('.config-options').slideToggle();
+    });
+
+    // 点击其他地方时收起配置选项
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.config-component').length) {
+            $('.config-options').slideUp();
         }
+    });
 
-        var model_config = [];
-        components.each(function() {
-            var type = $(this).data('type');
-            var name = $(this).find('.component-name').text();
-            var params = {}; // 可以添加参数配置功能
-            model_config.push({'type': name, 'params': params});
-        });
+    // 帮助按钮点击事件
+    $('#help-button').click(function() {
+        $('#help-panel').toggleClass('show');
+    });
 
-        var training_params = {
-            'learning_rate': 0.001,
-            'batch_size': 64,
-            'epochs': 5
-        };
-
-        // 禁用训练按钮
-        $('#train-button').prop('disabled', true).text('训练中...');
-        
-        // 重置进度条
-        $('#training-progress .progress-bar')
-            .css('width', '0%')
-            .text('0%');
-        $('#training-progress').show();
-
-        // 开始轮询训练进度
-        var progressCheck = setInterval(function() {
-            $.get('/training_progress', function(data) {
-                var progress = data.progress;
-                $('#training-progress .progress-bar')
-                    .css('width', progress + '%')
-                    .text(progress + '%');
-                
-                if (progress >= 100) {
-                    clearInterval(progressCheck);
-                }
-            });
-        }, 1000);
-
-        $.ajax({
-            url: '/train',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({'model_config': model_config, 'training_params': training_params}),
-            success: function(response) {
-                clearInterval(progressCheck);
-                if (response.status === 'success') {
-                    $('#training-progress .progress-bar')
-                        .css('width', '100%')
-                        .text('100%');
-                    
-                    alert('训练完成！\n模型准确率: ' + response.accuracy.toFixed(2) + '%\n模型已保存为：' + response.model_name);
-                    window.location.href = response.redirect_url;
-                } else {
-                    alert('训练失败：' + response.message);
-                }
-            },
-            error: function(xhr) {
-                clearInterval(progressCheck);
-                alert('训练过程中出现错误：' + (xhr.responseJSON ? xhr.responseJSON.message : '未知错误'));
-            },
-            complete: function() {
-                // 恢复训练按钮
-                $('#train-button').prop('disabled', false).text('开始训练');
-            }
-        });
+    // 关闭按钮点击事件
+    $('.close-help-button').click(function() {
+        $('#help-panel').removeClass('show');
     });
 });
