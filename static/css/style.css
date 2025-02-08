@@ -1,0 +1,182 @@
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+#component-library {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    height: 100%;
+}
+
+#workspace {
+    padding: 15px;
+}
+
+#drop-area {
+    width: 100%;
+    min-height: 200px;
+    border: 2px dashed #dee2e6;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #f8f9fa;
+    background: #f8f9fa url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M54 0h6v6h-6zM0 0h6v6H0zm0 54h6v6H0zm54 0h6v6h-6z' fill='%23e9ecef' fill-opacity='0.4' fill-rule='evenodd'/%3E%3C/svg%3E");
+    transition: all 0.2s ease;
+}
+
+#drop-area.ui-droppable-active {
+    background-color: #e9ecef;
+    border-color: #6c757d;
+}
+
+#drop-area.ui-droppable-hover {
+    background-color: #dee2e6;
+    border-color: #0d6efd;
+}
+
+.draggable, .dropped-component {
+    padding: 10px;
+    margin: 5px;
+    background-color: #e9ecef;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: move;
+    display: inline-block;
+}
+
+.draggable {
+    transition: all 0.2s ease;
+}
+
+.draggable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.saved-model {
+    padding: 10px;
+    margin: 5px;
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 4px;
+}
+
+#model-visualization {
+    margin: 20px 0;
+    min-height: 200px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    background-color: white;
+}
+
+.layer-node {
+    fill: #f8f9fa;
+    stroke: #dee2e6;
+    stroke-width: 2px;
+}
+
+.layer-node:hover {
+    fill: #e9ecef;
+}
+
+#training-progress {
+    margin: 20px 0;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: white;
+}
+
+.progress {
+    height: 25px;
+    margin-top: 10px;
+}
+
+.progress-bar {
+    transition: width 0.5s ease-in-out;
+    background-color: #007bff;
+}
+
+.section-title {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+    color: #495057;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.dropped-component {
+    padding: 10px;
+    margin: 5px;
+    background-color: #e9ecef;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: move;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.dropped-component:hover {
+    background-color: #dee2e6;
+}
+
+.drag-handle {
+    cursor: move;
+    padding: 0 8px;
+    color: #6c757d;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.component-name {
+    flex-grow: 1;
+    margin: 0 8px;
+}
+
+.remove-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 8px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.remove-btn:hover {
+    opacity: 1;
+}
+
+/* 排序时的视觉反馈 */
+.ui-sortable-helper {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.ui-sortable-placeholder {
+    visibility: visible !important;
+    background-color: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    margin: 5px;
+    height: 40px;
+}

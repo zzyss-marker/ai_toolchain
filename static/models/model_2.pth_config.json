@@ -1,0 +1,1 @@
+[{"type": "MNIST", "params": {}}, {"type": "ReLU", "params": {}}, {"type": "MaxPool2D", "params": {}}, {"type": "Conv2D", "params": {}}, {"type": "ReLU", "params": {}}, {"type": "MaxPool2D", "params": {}}, {"type": "Flatten", "params": {}}, {"type": "Linear", "params": {}}]
