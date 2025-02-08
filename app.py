@@ -124,11 +124,23 @@ def train():
                 elif aug == 'RandomHorizontalFlip':
                     transform_list.append(transforms.RandomHorizontalFlip())
                 elif aug == 'RandomCrop':
-                    transform_list.append(transforms.RandomCrop(32, padding=4))
+                    # 根据数据集调整裁剪大小
+                    if dataset_name in ['MNIST', 'FashionMNIST']:
+                        transform_list.append(transforms.RandomCrop(28, padding=4))
+                    else:  # CIFAR10
+                        transform_list.append(transforms.RandomCrop(32, padding=4))
                 elif aug == 'ColorJitter':
-                    transform_list.append(transforms.ColorJitter(brightness=0.2, contrast=0.2))
+                    # 只对 CIFAR10 使用颜色增强
+                    if dataset_name == 'CIFAR10':
+                        transform_list.append(transforms.ColorJitter(brightness=0.2, contrast=0.2))
 
         # 添加基本转换
+        # 确保调整到正确的大小
+        if dataset_name in ['MNIST', 'FashionMNIST']:
+            transform_list.append(transforms.Resize((28, 28)))
+        else:  # CIFAR10
+            transform_list.append(transforms.Resize((32, 32)))
+        
         transform_list.append(transforms.ToTensor())
         
         # 添加标准化
