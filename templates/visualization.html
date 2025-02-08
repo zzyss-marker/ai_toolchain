@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>模型推理可视化</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <style>
+        .visualization-container {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            padding: 20px;
+        }
+        #model-3d {
+            flex: 1;
+            height: 60vh;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            position: relative;
+        }
+        .layer-info {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-left: 20px;
+        }
+        .feature-map {
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .formula {
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .nav-bar {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+        }
+        .model-view {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 100px);
+        }
+        
+        .model-controls {
+            text-align: center;
+        }
+        
+        .layer-flow {
+            height: 30vh;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 20px;
+        }
+        
+        .badge {
+            padding: 5px 10px;
+            margin-right: 5px;
+        }
+        
+        .bg-conv2d { background-color: #007bff; }
+        .bg-relu { background-color: #28a745; }
+        .bg-maxpool2d { background-color: #dc3545; }
+        .bg-flatten { background-color: #ffc107; color: #000; }
+        .bg-linear { background-color: #6f42c1; }
+        .bg-dropout { background-color: #fd7e14; }
+        
+        .feature-map {
+            transition: all 0.3s ease;
+        }
+        
+        .feature-map:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .feature-visualization {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .feature-cell {
+            aspect-ratio: 1;
+            background: #f8f9fa;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .process-container {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding: 20px;
+            gap: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .input-image {
+            flex: 0 0 auto;
+            text-align: center;
+        }
+        
+        .feature-img {
+            max-width: 200px;
+            max-height: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .feature-maps-container {
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+        }
+        
+        .layer-feature-maps {
+            flex: 0 0 auto;
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            min-width: 200px;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .feature-map-cell {
+            width: 45px;
+            height: 45px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .process-steps {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .computation-step {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .step-formula {
+            font-family: 'Courier New', monospace;
+            background: #f1f1f1;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        
+        .step-visualization {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .tensor-shape {
+            font-family: monospace;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .computation-details {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .layer-visualizations {
+            flex: 1;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .feature-maps-flow {
+            display: flex;
+            overflow-x: auto;
+            gap: 20px;
+            padding: 10px;
+        }
+        
+        .feature-map-group {
+            flex: 0 0 auto;
+            text-align: center;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            min-width: 200px;
+        }
+        
+        .feature-map-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .network-structure {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .network-diagram {
+            height: 250px;
+            overflow: visible;
+            border: 1px solid #dee2e6;
+        }
+        
+        .network-node {
+            fill: #fff;
+            stroke: #666;
+            stroke-width: 2px;
+            transition: all 0.3s ease;
+        }
+        
+        .network-node:hover {
+            fill: #e9ecef;
+            stroke: #007bff;
+        }
+        
+        .network-link {
+            stroke: #999;
+            stroke-width: 2px;
+            marker-end: url(#arrowhead);
+        }
+        
+        .node-label {
+            font-size: 12px;
+            font-family: monospace;
+            pointer-events: none;
+        }
+        
+        .computation-step {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .computation-step:hover {
+            transform: translateX(5px);
+        }
+        
+        .computation-formula {
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        
+        .layer-params {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        
+        .network-overview {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <a href="/inference" class="btn btn-outline-secondary">返回推理页面</a>
+        <span class="ms-3">当前模型：{{ model_name }}</span>
+        <span class="ms-3">数据集：{{ dataset }}</span>
+    </div>
+    
+    <div class="visualization-container">
+        <div class="model-view">
+            <div class="network-overview mb-4">
+                <h5>网络结构概览</h5>
+                <div class="network-diagram p-3 bg-white rounded">
+                    <svg id="network-svg"></svg>
+                </div>
+            </div>
+            <div class="computation-details">
+                <h5>计算过程详解</h5>
+                <div class="computation-steps">
+                    <!-- 这里将显示每一层的计算过程 -->
+                </div>
+            </div>
+        </div>
+        <div class="layer-info">
+            <h3>层级信息</h3>
+            <div class="layer-summary mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h6>模型结构概览</h6>
+                        <ul class="list-unstyled">
+                            {% for layer in model_config %}
+                            <li>
+                                <span class="badge bg-{{ layer.type|lower }}">{{ layer.type }}</span>
+                                {% if layer.params %}
+                                <small class="text-muted">
+                                    ({{ layer.params|tojson }})
+                                </small>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div id="layer-details"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const modelConfig = {{ model_config|tojson|safe }};
+            const visualizationData = {{ visualization_data|tojson|safe }};
+            console.log('Model config:', modelConfig);
+            
+            // 初始化网络结构图
+            initNetworkDiagram(modelConfig);
+            
+            // 显示计算过程
+            showComputationSteps(modelConfig);
+        });
+
+        function initNetworkDiagram(config) {
+            const svg = d3.select('#network-svg');
+            const width = svg.node().parentNode.clientWidth;
+            const height = 250;
+            
+            svg.attr('width', width)
+               .attr('height', height);
+            
+            // 添加箭头标记
+            svg.append('defs').append('marker')
+                .attr('id', 'arrowhead')
+                .attr('viewBox', '-0 -5 10 10')
+                .attr('refX', 28)
+                .attr('refY', 0)
+                .attr('orient', 'auto')
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', '#999');
+            
+            // 创建节点数据
+            const nodes = config.map((layer, i) => ({
+                id: i,
+                name: layer.type,
+                x: (i + 1) * (width / (config.length + 1)),
+                y: height / 2
+            }));
+            
+            // 创建连线数据
+            const links = nodes.slice(1).map((node, i) => ({
+                source: nodes[i],
+                target: node
+            }));
+            
+            // 绘制连线
+            svg.selectAll('line')
+               .data(links)
+               .enter()
+               .append('line')
+               .attr('class', 'network-link')
+               .attr('x1', d => d.source.x)
+               .attr('y1', d => d.source.y)
+               .attr('x2', d => d.target.x)
+               .attr('y2', d => d.target.y);
+            
+            // 绘制节点
+            const nodes_g = svg.selectAll('g')
+                .data(nodes)
+                .enter()
+                .append('g')
+                .attr('transform', d => `translate(${d.x},${d.y})`);
+            
+            nodes_g.append('circle')
+                .attr('class', 'network-node')
+                .attr('r', 20);
+            
+            nodes_g.append('text')
+                .attr('class', 'node-label')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '.3em')
+                .text(d => d.name);
+        }
+
+        function showComputationSteps(config) {
+            const container = document.querySelector('.computation-steps');
+            container.innerHTML = '';
+            
+            config.forEach((layer, index) => {
+                const step = document.createElement('div');
+                step.className = 'computation-step';
+                
+                let content = `
+                    <h6>第 ${index + 1} 层: ${layer.type}</h6>
+                    ${getLayerDescription(layer)}
+                    ${getLayerParams(layer)}
+                `;
+                
+                step.innerHTML = content;
+                container.appendChild(step);
+            });
+        }
+
+        function getLayerDescription(layer) {
+            let html = '';
+            switch (layer.type) {
+                case 'Conv2D':
+                    html += `
+                        <div class="computation-formula">
+                            <p>卷积运算：</p>
+                            输出大小 = (输入大小 - ${layer.params.kernel_size} + 2×${layer.params.padding}) / ${layer.params.stride} + 1
+                            <br>
+                            特征图数量：${layer.params.out_channels}
+                        </div>
+                    `;
+                    break;
+                case 'MaxPool2D':
+                    html += `
+                        <div class="computation-formula">
+                            最大池化：在每个 ${layer.params.kernel_size}×${layer.params.kernel_size} 的窗口中取最大值
+                            <br>
+                            步长：${layer.params.stride}
+                        </div>
+                    `;
+                    break;
+                case 'ReLU':
+                    html += `
+                        <div class="computation-formula">
+                            ReLU激活函数：f(x) = max(0, x)
+                            <br>
+                            将所有负值置为0，保持正值不变
+                        </div>
+                    `;
+                    break;
+                case 'Linear':
+                    html += `
+                        <div class="computation-formula">
+                            全连接层：y = W × x + b
+                            <br>
+                            W的形状：${layer.params.in_features} × ${layer.params.out_features}
+                        </div>
+                    `;
+                    break;
+            }
+            return html;
+        }
+
+        function getLayerParams(layer) {
+            if (!layer.params) return '';
+            
+            let html = '<div class="layer-params">';
+            html += '<h6>层参数：</h6>';
+            
+            Object.entries(layer.params).forEach(([key, value]) => {
+                html += `<div>${key}: ${value}</div>`;
+            });
+            
+            html += '</div>';
+            return html;
+        }
+    </script>
+</body>
+</html>

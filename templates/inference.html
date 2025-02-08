@@ -5,6 +5,9 @@
     <title>模型推理</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <style>
         #canvas {
             border: 2px solid #000;
@@ -307,6 +310,61 @@
         .dataset-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .visualization-container {
+            display: flex;
+            flex-direction: row;
+            height: 70vh;
+        }
+        #model-3d {
+            flex: 2;
+            height: 100%;
+        }
+        .layer-info {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .feature-map {
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+        .formula {
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .inference-process {
+            margin-top: 20px;
+            background: #f8f9fa;
+        }
+        
+        .step-block {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: white;
+        }
+        
+        .step-block h6 {
+            margin-bottom: 10px;
+            color: #0d6efd;
+        }
+        
+        .step-content {
+            padding-left: 15px;
+        }
+        
+        .layer-params {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -654,6 +712,7 @@
                 processData: false,
                 contentType: false,
                 success: function(response) {
+                    console.log('Inference response:', response);
                     let className = response.prediction;
                     if (response.dataset === 'CIFAR10') {
                         className = CIFAR10_CLASSES[response.prediction];
@@ -668,6 +727,17 @@
                             <br>
                             <small class="text-muted">置信度: ${(response.confidence * 100).toFixed(2)}%</small>
                         </div>
+                        <div class="inference-process card mb-3">
+                            <div class="card-header">
+                                <h5 class="mb-0">推理过程详解</h5>
+                            </div>
+                            <div class="card-body">
+                                ${renderInferenceDetails(response.inference_details)}
+                            </div>
+                        </div>
+                        <a href="/visualization/${modelName}" class="btn btn-primary" target="_blank">
+                            查看推理过程可视化
+                        </a>
                     `);
                 },
                 error: function() {
@@ -859,6 +929,7 @@
                         processData: false,
                         contentType: false,
                         success: function(response) {
+                            console.log('Inference response:', response);
                             let className = response.prediction;
                             if (response.dataset === 'CIFAR10') {
                                 className = CIFAR10_CLASSES[response.prediction];
@@ -945,6 +1016,89 @@
             $('#model-select').val('');
             $('#model-info').hide();
             $('#prediction-result').empty();
+        }
+
+        // 添加渲染推理详情的函数
+        function renderInferenceDetails(details) {
+            let html = '';
+            
+            // 渲染输入信息
+            const input = details[0];
+            html += `
+                <div class="step-block">
+                    <h6>输入数据</h6>
+                    <div class="step-content">
+                        <p>形状: ${input.shape.join(' × ')}</p>
+                        <p>数据范围: [${input.range[0].toFixed(3)}, ${input.range[1].toFixed(3)}]</p>
+                    </div>
+                </div>
+            `;
+            
+            // 渲染每一层的信息
+            for (let i = 1; i < details.length; i++) {
+                const layer = details[i];
+                html += `
+                    <div class="step-block">
+                        <h6>第 ${layer.layer_num} 层: ${layer.name}</h6>
+                        <div class="step-content">
+                            <p>类型: ${getLayerTypeDescription(layer)}</p>
+                            ${renderLayerParams(layer)}
+                            <p>输出形状: ${layer.output_shape.join(' × ')}</p>
+                            <p>输出范围: [${layer.output_range[0].toFixed(3)}, ${layer.output_range[1].toFixed(3)}]</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return html;
+        }
+        
+        function getLayerTypeDescription(layer) {
+            switch (layer.type) {
+                case 'Conv2D': return '卷积层';
+                case 'MaxPool2D': return '最大池化层';
+                case 'ReLU': return 'ReLU激活函数';
+                case 'Flatten': return '展平层';
+                case 'Linear': return '全连接层';
+                default: return layer.type;
+            }
+        }
+        
+        function renderLayerParams(layer) {
+            if (!layer.params) return '';
+            
+            let html = '<div class="layer-params">';
+            switch (layer.type) {
+                case 'Conv2D':
+                    html += `
+                        <p>输入通道数: ${layer.params.in_channels}</p>
+                        <p>输出通道数: ${layer.params.out_channels}</p>
+                        <p>卷积核大小: ${layer.params.kernel_size}</p>
+                        <p>步长: ${layer.params.stride}</p>
+                        <p>填充: ${layer.params.padding}</p>
+                        <div class="formula">
+                            输出大小 = (输入大小 - 核大小 + 2×填充) / 步长 + 1
+                        </div>
+                    `;
+                    break;
+                case 'MaxPool2D':
+                    html += `
+                        <p>池化窗口大小: ${layer.params.kernel_size}</p>
+                        <p>步长: ${layer.params.stride}</p>
+                    `;
+                    break;
+                case 'Linear':
+                    html += `
+                        <p>输入维度: ${layer.params.in_features}</p>
+                        <p>输出维度: ${layer.params.out_features}</p>
+                        <div class="formula">
+                            y = Wx + b
+                        </div>
+                    `;
+                    break;
+            }
+            html += '</div>';
+            return html;
         }
     </script>
 </body>

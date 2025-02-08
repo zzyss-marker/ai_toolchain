@@ -31,6 +31,9 @@ validation_accuracy = []
 training_progress = 0
 progress_lock = threading.Lock()
 
+# 全局变量存储最后一次推理的数据
+last_inference_data = None
+
 AVAILABLE_DATASETS = {
     'MNIST': {
         'loader': datasets.MNIST,
@@ -76,6 +79,10 @@ def train():
         training_params = data['training_params']
         dataset_name = data.get('dataset')
         preprocessing = data.get('preprocessing', {})
+
+        # 过滤掉非模型层的配置
+        model_config = [layer for layer in model_config 
+                       if layer['type'] in ['Conv2D', 'MaxPool2D', 'ReLU', 'Flatten', 'Linear', 'Dropout']]
 
         print(f"Received dataset name: {dataset_name}")
         print(f"Available datasets: {list(AVAILABLE_DATASETS.keys())}")
@@ -270,7 +277,13 @@ def inference():
             file = request.files['image']
             model_name = request.form.get('model_name')
             
-            print(f"开始处理推理请求: {model_name}")
+            # 保存当前推理的信息到全局变量
+            global last_inference_data
+            last_inference_data = {
+                'input_image': None,
+                'intermediate_outputs': None,
+                'model_name': model_name
+            }
             
             # 加载模型数据
             model_path = f'static/models/{model_name}'
@@ -281,16 +294,39 @@ def inference():
             print(f"模型输入形状: {model_data['input_shape']}")
             print(f"预处理配置: {model_data['preprocessing']}")
 
+            # 过滤掉非模型层的配置
+            valid_layer_types = ['Conv2D', 'MaxPool2D', 'ReLU', 'Flatten', 'Linear', 'Dropout']
+            model_config = [layer for layer in model_data['model_config'] 
+                          if layer['type'] in valid_layer_types]
+            print(f"过滤后的模型配置: {model_config}")
+
             # 构建模型并加载参数
-            model = Net(model_data['model_config'], 
+            model = Net(model_config, 
                       input_shape=model_data['input_shape'],
                       num_classes=model_data['num_classes'])
-            model.load_state_dict(model_data['model_state'])
+            # 转换状态字典的键名
+            state_dict = model_data['model_state']
+            new_state_dict = {}
+            for k, v in state_dict.items():
+                # 将 'model.' 前缀替换为空
+                if k.startswith('model.'):
+                    new_key = k
+                else:
+                    new_key = 'model.' + k
+                new_state_dict[new_key] = v
+            
+            model.load_state_dict(new_state_dict)
             model.eval()
 
             # 处理上传的图片
             img = Image.open(file)
             
+            # 将图片转换为base64以便在前端显示
+            buffered = io.BytesIO()
+            img.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            last_inference_data['input_image'] = f'data:image/png;base64,{img_str}'
+
             # 保存原始图像尺寸用于调试
             original_size = img.size
             print(f"原始图像尺寸: {original_size}")
@@ -357,6 +393,78 @@ def inference():
             # 进行预测
             with torch.no_grad():
                 output = model(img_tensor)
+                intermediate_outputs = model.get_intermediate_outputs()
+                last_inference_data['intermediate_outputs'] = intermediate_outputs
+                
+                # 收集推理过程的详细信息
+                inference_details = []
+                # 添加输入信息
+                inference_details.append({
+                    'type': 'input',
+                    'shape': list(img_tensor.shape),
+                    'range': [float(img_tensor.min()), float(img_tensor.max())]
+                })
+                
+                # 添加每一层的信息
+                for i, (name, layer) in enumerate(zip(model.layer_names, model.model)):
+                    layer_info = {
+                        'layer_num': i + 1,
+                        'name': name,
+                        'type': name,
+                        'output_shape': list(intermediate_outputs[f'{name}_{i}'].shape),
+                        'output_range': [
+                            float(intermediate_outputs[f'{name}_{i}'].min()),
+                            float(intermediate_outputs[f'{name}_{i}'].max())
+                        ]
+                    }
+                    
+                    # 添加层特定的参数
+                    if isinstance(layer, nn.Conv2d):
+                        layer_info.update({
+                            'params': {
+                                'in_channels': layer.in_channels,
+                                'out_channels': layer.out_channels,
+                                'kernel_size': layer.kernel_size[0],
+                                'stride': layer.stride[0],
+                                'padding': layer.padding[0]
+                            }
+                        })
+                    elif isinstance(layer, nn.MaxPool2d):
+                        layer_info.update({
+                            'params': {
+                                'kernel_size': layer.kernel_size,
+                                'stride': layer.stride
+                            }
+                        })
+                    elif isinstance(layer, nn.Linear):
+                        layer_info.update({
+                            'params': {
+                                'in_features': layer.in_features,
+                                'out_features': layer.out_features
+                            }
+                        })
+                    
+                    inference_details.append(layer_info)
+
+                # 处理中间层输出，转换为可视化数据
+                visualization_data = []
+                for layer_name, layer_output in intermediate_outputs.items():
+                    if layer_output.dim() <= 2:  # 对于全连接层
+                        data = {
+                            'type': 'dense',
+                            'name': layer_name,
+                            'shape': list(layer_output.shape),
+                            'values': layer_output.numpy().tolist()
+                        }
+                    else:  # 对于卷积层和池化层
+                        data = {
+                            'type': 'conv',
+                            'name': layer_name,
+                            'shape': list(layer_output.shape),
+                            'feature_maps': layer_output.numpy().tolist()
+                        }
+                    visualization_data.append(data)
+
                 # 获取预测概率
                 probabilities = F.softmax(output, dim=1)
                 pred_prob, pred = probabilities.max(1)
@@ -372,7 +480,9 @@ def inference():
                     'prediction': pred.item(),
                     'confidence': float(pred_prob.item()),
                     'dataset': dataset_type,
-                    'probabilities': [float(p) for p in probabilities[0].tolist()]
+                    'probabilities': [float(p) for p in probabilities[0].tolist()],
+                    'inference_details': inference_details,
+                    'visualization_data': visualization_data
                 })
 
         except Exception as e:
@@ -448,6 +558,40 @@ def get_models():
         models = [f for f in os.listdir(models_dir) if f.endswith('.pth')]
         return jsonify(models)
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/visualization/<model_name>')
+def visualization(model_name):
+    try:
+        print(f"Loading visualization for model: {model_name}")
+        # 加载模型数据
+        model_path = f'static/models/{model_name}'
+        model_data = torch.load(model_path)
+        print("Model data loaded successfully")
+        print("Model config:", model_data['model_config'])
+        
+        # 获取最后一次推理的数据
+        print("Last inference data:", last_inference_data if 'last_inference_data' in globals() else None)
+        
+        visualization_data = {
+            'model_structure': model_data['model_config'],
+            'input_image': getattr(last_inference_data, 'input_image', None) if 'last_inference_data' in globals() else None,
+            'intermediate_outputs': getattr(last_inference_data, 'intermediate_outputs', {}) if 'last_inference_data' in globals() else {},
+            'input_shape': model_data['input_shape'],
+            'dataset_type': model_data['dataset']
+        }
+        
+        print("Prepared visualization data:", visualization_data)
+
+        return render_template('visualization.html', 
+                            model_name=model_name,
+                            dataset=model_data['dataset'],
+                            model_config=model_data['model_config'],
+                            visualization_data=visualization_data)
+    except Exception as e:
+        print(f"Error loading visualization: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.errorhandler(404)
